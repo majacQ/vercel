@@ -24,7 +24,7 @@
     "regexr": "https://github.com/ijjk/regexr-lexer.git#3bcf3d1c4bc6dd9239c47acb1fb7b419823f8337"
   },
   "devDependencies": {
-    "@types/node": "12.12.20",
+    "@types/node": "12.20.7",
     "ajv": "^6.0.0",
     "typescript": "3.9.3"
   },
