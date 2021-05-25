@@ -3,8 +3,18 @@
     "build": "next build"
   },
   "dependencies": {
+  <<<<<<< snyk-fix-bd8ae755420761a3535e6ee556c1fffc
+    "next": "9.3.4",
+  =======
+  <<<<<<< snyk-upgrade-ee2d963a7b3efdd6d61af1ee0a076f93
     "next": "9.0.0",
+    "react": "16.14.0",
+    "react-dom": "16.14.0"
+  =======
+    "next": "9.0.6",
+  >>>>>>> master
     "react": "16.8.6",
     "react-dom": "16.8.6"
+  >>>>>>> master
   }
 }

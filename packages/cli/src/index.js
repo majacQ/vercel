@@ -6,7 +6,7 @@ try {
   process.cwd();
 } catch (e) {
   if (e && e.message && e.message.includes('uv_cwd')) {
-    console.error(error('The current working directory does not exist.'));
+    console.error('Error! The current working directory does not exist.');
     process.exit(1);
   }
 }
@@ -136,7 +136,7 @@ const main = async () => {
     const { latest } = notifier.update;
     console.log(
       info(
-        `${chalk.bgRed('UPDATE AVAILABLE')} ` +
+        `${chalk.black.bgCyan('UPDATE AVAILABLE')} ` +
           `Run ${cmd(
             await getUpdateCommand()
           )} to install ${getTitleName()} CLI ${latest}`
