@@ -6,7 +6,11 @@
     "build": "next build"
   },
   "dependencies": {
+  <<<<<<< snyk-fix-3a148071556e8b2dd97f5d2a1224df19
     "next": "^10.2.1",
+  =======
+    "next": "^9.5.3",
+  >>>>>>> master
     "react": "^16.7.0",
     "react-dom": "^16.7.0"
   }
