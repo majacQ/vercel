@@ -2509,7 +2509,11 @@ acorn-class-fields@^1.0.0:
   dependencies:
     acorn-private-class-elements "^1.0.0"
 
+  <<<<<<< dependabot/npm_and_yarn/api/node-fetch-2.6.1
+acorn-globals@^4.1.0:
+  =======
 acorn-globals@^4.3.2:
+  >>>>>>> master
   version "4.3.4"
   resolved "https://registry.yarnpkg.com/acorn-globals/-/acorn-globals-4.3.4.tgz#9fa1926addc11c97308c4e66d7add0d40c3272e7"
   integrity sha512-clfQEh21R+D0leSbUdWf3OcfqyaCSAQ8Ryq00bofSekfr9W8u1jyYZo6ir0xu9Gtcf7BjcHJpnbZH7JOCpP60A==
