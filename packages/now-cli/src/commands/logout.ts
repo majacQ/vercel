@@ -11,7 +11,7 @@ import {
 } from '../util/config/files';
 import getArgs from '../util/get-args';
 import { NowContext } from '../types';
-import createOutput, { Output } from '../util/output';
+import { Output } from '../util/output';
 import { getPkgName } from '../util/pkg-name';
 
 const help = () => {
@@ -54,13 +54,11 @@ export default async function main(ctx: NowContext): Promise<number> {
     return 2;
   }
 
-  const debugEnabled = argv['--debug'];
-  const output = createOutput({ debug: debugEnabled });
-  return logout(ctx.apiUrl, output);
+  return logout(ctx.apiUrl, ctx.output);
 }
 
 const logout = async (apiUrl: string, output: Output) => {
-  const spinner = output.spinner('Logging out...', 200);
+  output.spinner('Logging out…', 200);
 
   const configContent = readConfigFile();
   const authContent = readAuthConfigFile();
@@ -83,7 +81,6 @@ const logout = async (apiUrl: string, output: Output) => {
     writeToAuthConfigFile(authContent);
     output.debug('Configuration has been deleted');
   } catch (err) {
-    spinner();
     output.error(`Couldn't remove config while logging out`);
     return 1;
   }
@@ -98,14 +95,12 @@ const logout = async (apiUrl: string, output: Output) => {
   if (res.status === 403) {
     output.debug('Token is invalid so it cannot be revoked');
   } else if (res.status !== 200) {
-    spinner();
     const err = await res.json();
     output.error('Failed to revoke token');
     output.debug(err ? err.message : '');
     return 1;
   }
 
-  spinner();
   output.log('Logged out!');
   return 0;
 };

@@ -2,15 +2,11 @@ import chalk from 'chalk';
 import ms from 'ms';
 import table from 'text-table';
 import Now from '../util';
-import getAliases from '../util/alias/get-aliases';
 import getArgs from '../util/get-args';
-import getDeploymentInstances from '../util/deploy/get-deployment-instances';
-import createOutput from '../util/output';
 import { handleError } from '../util/error';
 import cmd from '../util/output/cmd.ts';
 import logo from '../util/output/logo';
 import elapsed from '../util/output/elapsed.ts';
-import wait from '../util/output/wait';
 import strlen from '../util/strlen.ts';
 import Client from '../util/client.ts';
 import getScope from '../util/get-scope.ts';
@@ -38,7 +34,6 @@ const help = () => {
     'TOKEN'
   )}        Login token
     -S, --scope                    Set a custom scope
-    -a, --all                      See all instances for each deployment (requires [app])
     -m, --meta                     Filter deployments by metadata (e.g.: ${chalk.dim(
       '`-m KEY=value`'
     )}). Can appear many times.
@@ -54,12 +49,6 @@ const help = () => {
 
     ${chalk.cyan(`$ ${getPkgName()} ls my-app`)}
 
-  ${chalk.gray(
-    '–'
-  )} List all deployments and all instances for the app ${chalk.dim('`my-app`')}
-
-    ${chalk.cyan(`$ ${getPkgName()} ls my-app --all`)}
-
   ${chalk.gray('–')} Filter deployments by metadata
 
     ${chalk.cyan(`$ ${getPkgName()} ls -m key1=value1 -m key2=value2`)}
@@ -72,16 +61,12 @@ const help = () => {
 `);
 };
 
-// Options
-// $FlowFixMe
 export default async function main(ctx) {
   let argv;
 
   try {
     argv = getArgs(ctx.argv.slice(2), {
-      '--all': Boolean,
       '--meta': [String],
-      '-a': '--all',
       '-m': '--meta',
       '--next': Number,
       '-N': '--next',
@@ -91,11 +76,15 @@ export default async function main(ctx) {
     return 1;
   }
 
-  const debugEnabled = argv['--debug'];
+  const {
+    authConfig: { token },
+    output,
+    apiUrl,
+    config,
+  } = ctx;
 
-  const { print, log, error, note, debug } = createOutput({
-    debug: debugEnabled,
-  });
+  const debugEnabled = argv['--debug'];
+  const { print, log, error, note, debug, spinner } = output;
 
   if (argv._.length > 2) {
     error(`${getCommandName('ls [app]')} accepts at most one argument`);
@@ -105,24 +94,19 @@ export default async function main(ctx) {
   let app = argv._[1];
   let host = null;
 
-  const apiUrl = ctx.apiUrl;
-
   if (argv['--help']) {
     help();
     return 0;
   }
 
   const meta = parseMeta(argv['--meta']);
-  const {
-    authConfig: { token },
-    config,
-  } = ctx;
   const { currentTeam, includeScheme } = config;
   const client = new Client({
     apiUrl,
     token,
     currentTeam,
     debug: debugEnabled,
+    output,
   });
   let contextName = null;
 
@@ -144,17 +128,16 @@ export default async function main(ctx) {
     return 1;
   }
 
-  const stopSpinner = wait(
-    `Fetching deployments in ${chalk.bold(contextName)}`
-  );
+  spinner(`Fetching deployments in ${chalk.bold(contextName)}`);
 
-  const now = new Now({ apiUrl, token, debug: debugEnabled, currentTeam });
+  const now = new Now({
+    apiUrl,
+    token,
+    debug: debugEnabled,
+    output,
+    currentTeam,
+  });
   const start = new Date();
-
-  if (argv['--all'] && !app) {
-    error('You must define an app when using `-a` / `--all`');
-    return 1;
-  }
 
   if (app && !isValidName(app)) {
     error(`The provided argument "${app}" is not a valid project name`);
@@ -174,7 +157,6 @@ export default async function main(ctx) {
     const hostParts = asHost.split('-');
 
     if (hostParts < 2) {
-      stopSpinner();
       error('Only deployment hostnames are allowed, no aliases');
       return 1;
     }
@@ -183,19 +165,12 @@ export default async function main(ctx) {
     host = asHost;
   }
 
-  let response;
-
-  try {
-    debug('Fetching deployments');
-    response = await now.list(app, {
-      version: 6,
-      meta,
-      nextTimestamp,
-    });
-  } catch (err) {
-    stopSpinner();
-    throw err;
-  }
+  debug('Fetching deployments');
+  const response = await now.list(app, {
+    version: 6,
+    meta,
+    nextTimestamp,
+  });
 
   let { deployments, pagination } = response;
 
@@ -211,7 +186,6 @@ export default async function main(ctx) {
       if (err.status === 404) {
         debug('Ignore findDeployment 404');
       } else {
-        stopSpinner();
         throw err;
       }
     }
@@ -222,56 +196,12 @@ export default async function main(ctx) {
     }
   }
 
-  if (app && !deployments.length) {
-    debug(
-      'No deployments: attempting to find aliases that matches supplied app name'
-    );
-    const { aliases } = await getAliases(now);
-    const item = aliases.find(e => e.uid === app || e.alias === app);
-
-    if (item) {
-      debug(`Found alias that matches app name: ${item.alias}`);
-
-      if (Array.isArray(item.rules)) {
-        now.close();
-        stopSpinner();
-        log(`Found matching path alias: ${chalk.cyan(item.alias)}`);
-        log(`Please run ${getCommandName(`alias ls ${item.alias}`)} instead`);
-        return 0;
-      }
-
-      const match = await now.findDeployment(item.deploymentId);
-      const instances = await getDeploymentInstances(
-        now,
-        item.deploymentId,
-        'now_cli_alias_instances'
-      );
-      match.instanceCount = Object.keys(instances).reduce(
-        (count, dc) => count + instances[dc].instances.length,
-        0
-      );
-      if (match !== null && typeof match !== 'undefined') {
-        deployments = Array.of(match);
-      }
-    }
-  }
-
   now.close();
-
-  if (argv['--all']) {
-    await Promise.all(
-      deployments.map(async ({ uid, instanceCount }, i) => {
-        deployments[i].instances =
-          instanceCount > 0 ? await now.listInstances(uid) : [];
-      })
-    );
-  }
 
   if (host) {
     deployments = deployments.filter(deployment => deployment.url === host);
   }
 
-  stopSpinner();
   log(
     `Deployments under ${chalk.bold(contextName)} ${elapsed(
       Date.now() - start
@@ -288,12 +218,6 @@ export default async function main(ctx) {
     log(
       `To list more deployments for a project run ${cmd(
         `${getCommandName('ls [project]')}`
-      )}`
-    );
-  } else if (!argv['--all']) {
-    log(
-      `To list deployment instances run ${cmd(
-        `${getCommandName('ls --all [project]')}`
       )}`
     );
   }
@@ -316,15 +240,6 @@ export default async function main(ctx) {
               chalk.gray(ms(Date.now() - new Date(dep.createdAt))),
               dep.creator.username,
             ],
-            ...(argv['--all']
-              ? dep.instances.map(i => [
-                  '',
-                  ` ${chalk.gray('-')} ${i.url} `,
-                  '',
-                  '',
-                  '',
-                ])
-              : []),
           ])
           // flatten since the previous step returns a nested
           // array of the deployment and (optionally) its instances

@@ -1,7 +1,6 @@
 import chalk from 'chalk';
 import { email as regexEmail } from '../../util/input/regexes';
 import wait from '../../util/output/wait';
-import fatalError from '../../util/fatal-error';
 import cmd from '../../util/output/cmd.ts';
 import info from '../../util/output/info';
 import stamp from '../../util/output/stamp.ts';
@@ -57,7 +56,7 @@ const emailAutoComplete = (value, teamSlug) => {
   return false;
 };
 
-export default async function({
+export default async function ({
   teams,
   args,
   config,
@@ -65,6 +64,7 @@ export default async function({
   noopMsg = 'No changes made',
   apiUrl,
   token,
+  output,
 } = {}) {
   const { currentTeam: currentTeamId } = config;
 
@@ -76,7 +76,7 @@ export default async function({
   stopSpinner();
 
   const stopUserSpinner = wait('Fetching user information');
-  const client = new Client({ apiUrl, token });
+  const client = new Client({ apiUrl, token, output });
   let user;
   try {
     user = await getUser(client);
@@ -100,7 +100,8 @@ export default async function({
     )}.\nPlease select a team scope using ${getCommandName(
       `switch`
     )} or use ${cmd('--scope')}`;
-    return fatalError(err);
+    output.error(err);
+    return 1;
   }
 
   console.log(

@@ -24,6 +24,19 @@ async function expectBuilderError(promise, pattern) {
   );
 }
 
+let warningMessages;
+const originalConsoleWarn = console.warn;
+beforeEach(() => {
+  warningMessages = [];
+  console.warn = m => {
+    warningMessages.push(m);
+  };
+});
+
+afterEach(() => {
+  console.warn = originalConsoleWarn;
+});
+
 it('should re-create symlinks properly', async () => {
   if (process.platform === 'win32') {
     console.log('Skipping test on windows');
@@ -81,6 +94,10 @@ it('should only match supported node versions', async () => {
     'major',
     12
   );
+  expect(await getSupportedNodeVersion('14.x', false)).toHaveProperty(
+    'major',
+    14
+  );
   expect(getSupportedNodeVersion('8.11.x', false)).rejects.toThrow();
   expect(getSupportedNodeVersion('6.x', false)).rejects.toThrow();
   expect(getSupportedNodeVersion('999.x', false)).rejects.toThrow();
@@ -104,6 +121,10 @@ it('should only match supported node versions', async () => {
     'major',
     12
   );
+  expect(await getSupportedNodeVersion('14.x', true)).toHaveProperty(
+    'major',
+    14
+  );
   const foundMessage = /Found `engines` in `package\.json` with an invalid Node\.js version range/;
   await expectBuilderError(
     getSupportedNodeVersion('8.11.x', false),
@@ -125,8 +146,8 @@ it('should match all semver ranges', async () => {
   // See https://docs.npmjs.com/files/package.json#engines
   expect(await getSupportedNodeVersion('10.0.0')).toHaveProperty('major', 10);
   expect(await getSupportedNodeVersion('10.x')).toHaveProperty('major', 10);
-  expect(await getSupportedNodeVersion('>=10')).toHaveProperty('major', 12);
-  expect(await getSupportedNodeVersion('>=10.3.0')).toHaveProperty('major', 12);
+  expect(await getSupportedNodeVersion('>=10')).toHaveProperty('major', 14);
+  expect(await getSupportedNodeVersion('>=10.3.0')).toHaveProperty('major', 14);
   expect(await getSupportedNodeVersion('8.5.0 - 10.5.0')).toHaveProperty(
     'major',
     10
@@ -150,20 +171,57 @@ it('should ignore node version in vercel dev getNodeVersion()', async () => {
   ).toHaveProperty('runtime', 'nodejs');
 });
 
+it('should select project setting from config when no package.json is found', async () => {
+  expect(
+    await getNodeVersion('/tmp', undefined, { nodeVersion: '14.x' }, {})
+  ).toHaveProperty('range', '14.x');
+  expect(warningMessages).toStrictEqual([]);
+});
+
+it('should prefer package.json engines over project setting from config and warn', async () => {
+  expect(
+    await getNodeVersion(
+      path.join(__dirname, 'pkg-engine-node'),
+      undefined,
+      { nodeVersion: '12.x' },
+      {}
+    )
+  ).toHaveProperty('range', '14.x');
+  expect(warningMessages).toStrictEqual([
+    'Warning: Due to `engines` existing in your `package.json` file, the Node.js Version defined in your Project Settings will not apply. Learn More: http://vercel.link/node-version',
+  ]);
+});
+
+it('should not warn when package.json engines matches project setting from config', async () => {
+  expect(
+    await getNodeVersion(
+      path.join(__dirname, 'pkg-engine-node'),
+      undefined,
+      { nodeVersion: '14.x' },
+      {}
+    )
+  ).toHaveProperty('range', '14.x');
+  expect(warningMessages).toStrictEqual([]);
+});
+
 it('should get latest node version', async () => {
-  expect(await getLatestNodeVersion()).toHaveProperty('major', 12);
+  expect(await getLatestNodeVersion()).toHaveProperty('major', 14);
 });
 
 it('should throw for discontinued versions', async () => {
   // Mock a future date so that Node 8 becomes discontinued
   const realDateNow = Date.now.bind(global.Date);
-  global.Date.now = () => new Date('2020-02-14').getTime();
+  global.Date.now = () => new Date('2021-04-01').getTime();
 
   expect(getSupportedNodeVersion('8.10.x', false)).rejects.toThrow();
   expect(getSupportedNodeVersion('8.10.x', true)).rejects.toThrow();
+  expect(getSupportedNodeVersion('10.x', false)).rejects.toThrow();
+  expect(getSupportedNodeVersion('10.x', true)).rejects.toThrow();
 
-  expect(getDiscontinuedNodeVersions().length).toBe(1);
-  expect(getDiscontinuedNodeVersions()[0]).toHaveProperty('range', '8.10.x');
+  const discontinued = getDiscontinuedNodeVersions();
+  expect(discontinued.length).toBe(2);
+  expect(discontinued[0]).toHaveProperty('range', '10.x');
+  expect(discontinued[1]).toHaveProperty('range', '8.10.x');
 
   global.Date.now = realDateNow;
 });

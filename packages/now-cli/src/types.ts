@@ -1,4 +1,5 @@
 import { NowConfig } from './util/dev/types';
+import { Output } from './util/output';
 
 export type ThenArg<T> = T extends Promise<infer U> ? U : T;
 
@@ -8,6 +9,7 @@ export interface NowContext {
   authConfig: {
     token: string;
   };
+  output: Output;
   config: {
     currentTeam: string;
     updateChannel: string;
@@ -30,7 +32,6 @@ export type User = {
   bio?: string;
   date: number;
   email: string;
-  platformVersion: number;
   username: string;
   website?: string;
   billingChecked: boolean;
@@ -56,7 +57,6 @@ export type Team = {
   creatorId: string;
   membership: { uid: string; role: 'MEMBER' | 'OWNER'; created: number };
   name: string;
-  platformVersion: number;
   slug: string;
 };
 
@@ -83,6 +83,16 @@ export type Domain = {
   };
 };
 
+export type DomainConfig = {
+  configuredBy: null | 'CNAME' | 'A' | 'http';
+  misconfigured: boolean;
+  serviceType: 'zeit.world' | 'external' | 'na';
+  nameservers: string[];
+  cnames: string[] & { traceString?: string };
+  aValues: string[] & { traceString?: string };
+  dnssecEnabled?: boolean;
+};
+
 export type Cert = {
   uid: string;
   autoRenew: boolean;
@@ -92,63 +102,21 @@ export type Cert = {
   expiration: string;
 };
 
-export type DeploymentScale = {
-  [dc: string]: {
-    min: number;
-    max: number;
-  };
-};
-
-export type NpmDeployment = {
+export type Deployment = {
   uid: string;
   url: string;
   name: string;
-  type: 'NPM';
-  state: 'INITIALIZING' | 'FROZEN' | 'READY' | 'ERROR';
+  type: 'LAMBDAS';
+  state:
+    | 'BUILDING'
+    | 'ERROR'
+    | 'INITIALIZING'
+    | 'QUEUED'
+    | 'READY'
+    | 'CANCELED';
   version?: number;
   created: number;
   creator: { uid: string };
-  sessionAffinity: string;
-  scale: DeploymentScale;
-};
-
-export type StaticDeployment = {
-  uid: string;
-  url: string;
-  name: string;
-  type: 'STATIC';
-  state: 'INITIALIZING' | 'FROZEN' | 'READY' | 'ERROR';
-  version?: number;
-  created: number;
-  creator: { uid: string };
-  sessionAffinity: string;
-};
-
-export type DockerDeployment = {
-  uid: string;
-  url: string;
-  name: string;
-  type: 'DOCKER';
-  state: 'INITIALIZING' | 'FROZEN' | 'READY' | 'ERROR';
-  version?: number;
-  created: number;
-  creator: { uid: string };
-  sessionAffinity: string;
-  scale: DeploymentScale;
-  limits?: {
-    maxConcurrentReqs: number;
-    timeout: number;
-    duration: number;
-  };
-  slot?: string;
-};
-
-export type Deployment = NpmDeployment | StaticDeployment | DockerDeployment;
-
-type PathAliasRule = {
-  pathname: string;
-  method: Array<'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'>;
-  dest: string;
 };
 
 export type Alias = {
@@ -165,13 +133,6 @@ export type Alias = {
     email: string;
   };
   deploymentId?: string;
-  rules?: PathAliasRule[];
-};
-
-export type PathRule = {
-  dest: string;
-  pathname?: string;
-  method?: Array<string>;
 };
 
 export type DNSRecord = {
@@ -217,6 +178,16 @@ export type DNSRecordData =
   | SRVRecordData
   | MXRecordData;
 
+export interface ProjectAliasTarget {
+  createdAt?: number;
+  domain: string;
+  redirect?: string | null;
+  target: 'PRODUCTION' | 'STAGING';
+  configuredBy?: null | 'CNAME' | 'A';
+  configuredChangedAt?: null | number;
+  configuredChangeAttempts?: [number, number];
+}
+
 export interface Secret {
   uid: string;
   name: string;
@@ -234,26 +205,49 @@ export enum ProjectEnvTarget {
   Development = 'development',
 }
 
+export enum ProjectEnvType {
+  Plaintext = 'plain',
+  Secret = 'secret',
+  System = 'system',
+}
+
 export interface ProjectEnvVariable {
   key: string;
   value: string;
+  type: ProjectEnvType;
   configurationId?: string | null;
   createdAt?: number;
   updatedAt?: number;
+  target?: ProjectEnvTarget | ProjectEnvTarget[];
+}
+
+export interface ProjectEnvVariableV5 extends ProjectEnvVariable {
   target?: ProjectEnvTarget;
   system?: boolean;
 }
 
-export interface Project {
+export interface ProjectSettings {
+  framework?: string | null;
+  devCommand?: string | null;
+  buildCommand?: string | null;
+  outputDirectory?: string | null;
+  rootDirectory?: string | null;
+  autoExposeSystemEnvs?: boolean;
+  directoryListing?: boolean;
+}
+
+export interface Project extends ProjectSettings {
   id: string;
   name: string;
   accountId: string;
   updatedAt: number;
   createdAt: number;
+  alias?: ProjectAliasTarget[];
   devCommand?: string | null;
   framework?: string | null;
   rootDirectory?: string | null;
   latestDeployments?: Partial<Deployment>[];
+  autoExposeSystemEnvs?: boolean;
 }
 
 export interface Org {
@@ -272,3 +266,8 @@ export interface PaginationOptions {
   count: number;
   next?: number;
 }
+
+export type ProjectLinkResult =
+  | { status: 'linked'; org: Org; project: Project }
+  | { status: 'not_linked'; org: null; project: null }
+  | { status: 'error'; exitCode: number };

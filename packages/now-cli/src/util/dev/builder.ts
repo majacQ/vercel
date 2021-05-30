@@ -56,6 +56,8 @@ async function createBuildProcess(
   workPath: string,
   output: Output
 ): Promise<ChildProcess> {
+  output.debug(`Creating build process for "${match.entrypoint}"`);
+
   const builderWorkerPath = join(__dirname, 'builder-worker.js');
 
   // Ensure that `node` is in the builder's `PATH`
@@ -65,8 +67,6 @@ async function createBuildProcess(
     ...process.env,
     PATH,
     ...envConfigs.allEnv,
-    NOW_REGION: 'dev1',
-    VERCEL_REGION: 'dev1',
   };
 
   const buildProcess = fork(builderWorkerPath, [], {
@@ -78,7 +78,7 @@ async function createBuildProcess(
 
   buildProcess.on('exit', (code, signal) => {
     output.debug(
-      `Build process for ${match.src} exited with ${signal || code}`
+      `Build process for "${match.entrypoint}" exited with ${signal || code}`
     );
     match.buildProcess = undefined;
   });
@@ -128,7 +128,6 @@ export async function executeBuild(
 
   let { buildProcess } = match;
   if (!runInProcess && !buildProcess) {
-    devServer.output.debug(`Creating build process for ${entrypoint}`);
     buildProcess = await createBuildProcess(
       match,
       envConfigs,
@@ -150,8 +149,8 @@ export async function executeBuild(
       filesRemoved,
       // This env distiniction is only necessary to maintain
       // backwards compatibility with the `@vercel/next` builder.
-      env: envConfigs.runEnv,
-      buildEnv: envConfigs.buildEnv,
+      env: { ...envConfigs.runEnv },
+      buildEnv: { ...envConfigs.buildEnv },
     },
   };
 
@@ -281,7 +280,6 @@ export async function executeBuild(
       path = extensionless;
     }
 
-    delete output[path];
     output[path] = value;
   });
 
@@ -364,8 +362,6 @@ export async function executeBuild(
               ...nowConfig.env,
               ...asset.environment,
               ...envConfigs.runEnv,
-              NOW_REGION: 'dev1',
-              VERCEL_REGION: 'dev1',
             },
           },
         });
@@ -405,7 +401,7 @@ export async function getBuildMatches(
   const builds = nowConfig.builds || [{ src: '**', use: '@vercel/static' }];
 
   for (const buildConfig of builds) {
-    let { src, use } = buildConfig;
+    let { src = '**', use, config = {} } = buildConfig;
 
     if (!use) {
       continue;
@@ -431,7 +427,7 @@ export async function getBuildMatches(
     }
 
     const files = fileList
-      .filter(name => name === src || minimatch(name, src))
+      .filter(name => name === src || minimatch(name, src, { dot: true }))
       .map(name => join(cwd, name));
 
     if (files.length === 0) {
@@ -440,6 +436,15 @@ export async function getBuildMatches(
 
     for (const file of files) {
       src = relative(cwd, file);
+
+      // Remove the output directory prefix
+      if (config.zeroConfig && config.outputDirectory) {
+        const outputMatch = config.outputDirectory + '/';
+        if (src.startsWith(outputMatch)) {
+          src = src.slice(outputMatch.length);
+        }
+      }
+
       const builderWithPkg = await getBuilder(use, output);
       matches.push({
         ...buildConfig,

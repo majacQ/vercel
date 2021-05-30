@@ -4,11 +4,11 @@ import { join } from 'path';
 import { write as copy } from 'clipboardy';
 import chalk from 'chalk';
 import { fileNameSymbol } from '@vercel/client';
+import { getPrettyError } from '@vercel/build-utils';
 import Client from '../../util/client';
 import { handleError } from '../../util/error';
 import getArgs from '../../util/get-args';
 import toHumanPath from '../../util/humanize-path';
-import humanizeAjvError from '../../../src/util/humanize-ajv-error';
 import Now from '../../util';
 import stamp from '../../util/output/stamp.ts';
 import createDeploy from '../../util/deploy/create-deploy';
@@ -104,7 +104,7 @@ const printDeploymentStatus = async (
 
   if (readyState !== 'READY') {
     output.error(
-      `Your deployment failed. Please retry later. More: https://err.sh/now/deployment-error`
+      `Your deployment failed. Please retry later. More: https://err.sh/vercel/deployment-error`
     );
     return 1;
   }
@@ -157,13 +157,21 @@ const printDeploymentStatus = async (
   }
 
   if (indications) {
+    const indent = process.stdout.isTTY ? '    ' : ''; // if using emojis
+    const newline = '\n';
     for (let indication of indications) {
-      output.print(
-        prependEmoji(
-          `${chalk.dim(indication.payload)}`,
-          emoji(indication.type)
-        ) + `\n`
-      );
+      const message =
+        prependEmoji(chalk.dim(indication.payload), emoji(indication.type)) +
+        newline;
+      let link = '';
+      if (indication.link)
+        link =
+          indent +
+          chalk.dim(
+            `${indication.action || 'Learn More'}: ${indication.link}`
+          ) +
+          newline;
+      output.print(message + link);
     }
   }
 };
@@ -225,8 +233,7 @@ export default async function main(
   const paths = Object.keys(stats);
   const debugEnabled = argv['--debug'];
 
-  // $FlowFixMe
-  const isTTY = process.stdout.isTTY;
+  const { isTTY } = process.stdout;
   const quiet = !isTTY;
 
   // check paths
@@ -238,11 +245,6 @@ export default async function main(
 
   const { isFile, path } = pathValidation;
   const autoConfirm = argv['--confirm'] || isFile;
-
-  // --no-scale
-  if (argv['--no-scale']) {
-    warn(`The option --no-scale is only supported on Now 1.0 deployments`);
-  }
 
   // deprecate --name
   if (argv['--name']) {
@@ -260,6 +262,7 @@ export default async function main(
     apiUrl: ctx.apiUrl,
     token: ctx.authConfig.token,
     debug: debugEnabled,
+    output,
   });
 
   // retrieve `project` and `org` from .vercel
@@ -272,6 +275,7 @@ export default async function main(
   let { org, project, status } = link;
   let newProjectName = null;
   let rootDirectory = project ? project.rootDirectory : null;
+  let sourceFilesOutsideRootDirectory = true;
 
   if (status === 'not_linked') {
     const shouldStartSetup =
@@ -329,6 +333,7 @@ export default async function main(
     } else {
       project = projectOrNewProjectName;
       rootDirectory = project.rootDirectory;
+      sourceFilesOutsideRootDirectory = project.sourceFilesOutsideRootDirectory;
 
       // we can already link the project
       await linkFolderToProject(
@@ -345,7 +350,12 @@ export default async function main(
     }
   }
 
-  const sourcePath = rootDirectory ? join(path, rootDirectory) : path;
+  // if we have `sourceFilesOutsideRootDirectory` set to `true`, we use the current path
+  // and upload the entire directory.
+  const sourcePath =
+    rootDirectory && !sourceFilesOutsideRootDirectory
+      ? join(path, rootDirectory)
+      : path;
 
   if (
     rootDirectory &&
@@ -354,7 +364,7 @@ export default async function main(
       path,
       sourcePath,
       project
-        ? `To change your project settings, go to https://vercel.com/${org.slug}/${project.name}/settings`
+        ? `To change your Project Settings, go to https://vercel.com/${org.slug}/${project.name}/settings`
         : ''
     )) === false
   ) {
@@ -364,7 +374,7 @@ export default async function main(
   // If Root Directory is used we'll try to read the config
   // from there instead and use it if it exists.
   if (rootDirectory) {
-    const rootDirectoryConfig = readLocalConfig(sourcePath);
+    const rootDirectoryConfig = readLocalConfig(join(path, rootDirectory));
 
     if (rootDirectoryConfig) {
       debug(`Read local config from root directory (${rootDirectory})`);
@@ -521,6 +531,11 @@ export default async function main(
       skipAutoDetectionConfirmation: autoConfirm,
     };
 
+    if (!localConfig.builds || localConfig.builds.length === 0) {
+      // Only add projectSettings for zero config deployments
+      createArgs.projectSettings = { sourceFilesOutsideRootDirectory };
+    }
+
     deployment = await createDeploy(
       output,
       now,
@@ -540,6 +555,10 @@ export default async function main(
 
       if (rootDirectory) {
         projectSettings.rootDirectory = rootDirectory;
+      }
+
+      if (typeof sourceFilesOutsideRootDirectory !== 'undefined') {
+        projectSettings.sourceFilesOutsideRootDirectory = sourceFilesOutsideRootDirectory;
       }
 
       const settings = await editProjectSettings(
@@ -626,6 +645,7 @@ export default async function main(
           token: ctx.authConfig.token,
           currentTeam: org.id,
           debug: debugEnabled,
+          output,
         }),
         err.meta.domain,
         contextName
@@ -669,7 +689,7 @@ export default async function main(
     }
 
     if (err instanceof BuildError) {
-      output.error('Build failed');
+      output.error(err.message || 'Build failed');
       output.error(
         `Check your logs at https://${now.url}/_logs or run ${getCommandName(
           `logs ${now.url}`,
@@ -708,6 +728,7 @@ export default async function main(
       token: ctx.authConfig.token,
       currentTeam: org.type === 'team' ? org.id : null,
       debug: debugEnabled,
+      output,
     }),
     deployment,
     deployStamp,
@@ -738,10 +759,10 @@ function handleCreateDeployError(output, error, localConfig) {
     return 1;
   }
   if (error instanceof SchemaValidationFailed) {
-    const ajvError = error.meta;
-    const fileName = localConfig[fileNameSymbol];
-    const humanError = humanizeAjvError(ajvError, fileName);
-    output.prettyError(humanError);
+    const niceError = getPrettyError(error.meta);
+    const fileName = localConfig[fileNameSymbol] || 'vercel.json';
+    niceError.message = `Invalid ${fileName} - ${niceError.message}`;
+    output.prettyError(niceError);
     return 1;
   }
   if (error instanceof TooManyRequests) {

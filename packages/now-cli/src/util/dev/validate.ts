@@ -12,9 +12,9 @@ import {
   functionsSchema,
   buildsSchema,
   NowBuildError,
+  getPrettyError,
 } from '@vercel/build-utils';
 import { fileNameSymbol } from '@vercel/client';
-import humanizeAjvError from '../humanize-ajv-error';
 
 const vercelConfigSchema = {
   type: 'object',
@@ -34,16 +34,26 @@ const vercelConfigSchema = {
 };
 
 const ajv = new Ajv();
+const validate = ajv.compile(vercelConfigSchema);
 
 export function validateConfig(config: NowConfig): NowBuildError | null {
-  const validate = ajv.compile(vercelConfigSchema);
-
   if (!validate(config)) {
     if (validate.errors && validate.errors[0]) {
       const error = validate.errors[0];
-      const fileName = config[fileNameSymbol];
-      return humanizeAjvError(error, fileName);
+      const fileName = config[fileNameSymbol] || 'vercel.json';
+      const niceError = getPrettyError(error);
+      niceError.message = `Invalid ${fileName} - ${niceError.message}`;
+      return niceError;
     }
+  }
+
+  if (config.functions && config.builds) {
+    return new NowBuildError({
+      code: 'FUNCTIONS_AND_BUILDS',
+      message:
+        'The `functions` property cannot be used in conjunction with the `builds` property. Please remove one of them.',
+      link: 'https://vercel.link/functions-and-builds',
+    });
   }
 
   return null;

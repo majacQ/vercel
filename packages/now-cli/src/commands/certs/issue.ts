@@ -28,11 +28,11 @@ type Options = {
 export default async function issue(
   ctx: NowContext,
   opts: Options,
-  args: string[],
-  output: Output
+  args: string[]
 ) {
   const {
     authConfig: { token },
+    output,
     config,
   } = ctx;
   const { currentTeam } = config;
@@ -55,6 +55,7 @@ export default async function issue(
     token,
     currentTeam,
     debug: debugEnabled,
+    output,
   });
   let contextName = null;
 
@@ -75,7 +76,7 @@ export default async function issue(
   }
 
   if (crtPath || keyPath || caPath) {
-    if (args.length !== 0 || (!crtPath || !keyPath || !caPath)) {
+    if (args.length !== 0 || !crtPath || !keyPath || !caPath) {
       output.error(
         `Invalid number of arguments to create a custom certificate entry. Usage:`
       );
@@ -230,6 +231,8 @@ async function runStartOrder(
   output.print(
     `  ${chalk.cyan(getCommandName(`certs issue ${cns.join(' ')}`))}\n`
   );
-  output.print('  Read more: https://err.sh/now/solve-challenges-manually\n');
+  output.print(
+    '  Read more: https://err.sh/vercel/solve-challenges-manually\n'
+  );
   return 0;
 }
