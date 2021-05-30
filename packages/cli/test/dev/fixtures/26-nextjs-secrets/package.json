@@ -6,7 +6,11 @@
     "start": "next start"
   },
   "dependencies": {
+  <<<<<<< snyk-fix-e9ae5caf8c09023013ad9252376c8078
+    "next": "9.5.3",
+  =======
     "next": "10.2.1",
+  >>>>>>> master
     "react": "16.13.0",
     "react-dom": "16.13.0"
   }
