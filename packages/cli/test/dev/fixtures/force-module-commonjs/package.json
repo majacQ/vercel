@@ -7,7 +7,11 @@
     "start": "next start"
   },
   "dependencies": {
+  <<<<<<< snyk-fix-d614177f512c89fbde7fd51a90d21ec8
+    "next": "^10.2.1",
+  =======
     "next": "^9.5.3",
+  >>>>>>> master
     "react": "^16.13.1",
     "react-dom": "^16.13.1"
   },
