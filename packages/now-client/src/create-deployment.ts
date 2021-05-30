@@ -1,6 +1,6 @@
 import { readdir as readRootFolder, lstatSync } from 'fs-extra';
 
-import { relative, isAbsolute, basename } from 'path';
+import { relative, isAbsolute } from 'path';
 import hashes, { mapToObject } from './utils/hashes';
 import { upload } from './upload';
 import { buildFileTree, createDebug, parseVercelConfig } from './utils';
@@ -12,7 +12,7 @@ import {
   DeploymentEventType,
 } from './types';
 
-export default function buildCreateDeployment(version: number) {
+export default function buildCreateDeployment() {
   return async function* createDeployment(
     clientOptions: NowClientOptions,
     deploymentOptions: DeploymentOptions = {},
@@ -80,7 +80,11 @@ export default function buildCreateDeployment(version: number) {
       rootFiles = [path];
     }
 
-    let fileList = await buildFileTree(path, clientOptions.isDirectory, debug);
+    let { fileList } = await buildFileTree(
+      path,
+      clientOptions.isDirectory,
+      debug
+    );
 
     let configPath: string | undefined;
     if (!nowConfig) {
@@ -105,51 +109,13 @@ export default function buildCreateDeployment(version: number) {
       nowConfig = await parseVercelConfig(configPath);
     }
 
-    if (
-      version === 1 &&
-      nowConfig &&
-      Array.isArray(nowConfig.files) &&
-      nowConfig.files.length > 0
-    ) {
-      // See the docs: https://vercel.com/docs/v1/features/configuration/#files-(array)
-      debug(`Filtering file list based on \`files\` key in "${configPath}"`);
-      const allowedFiles = new Set<string>(['Dockerfile']);
-      const allowedDirs = new Set<string>();
-      nowConfig.files.forEach(relPath => {
-        if (lstatSync(relPath).isDirectory()) {
-          allowedDirs.add(relPath);
-        } else {
-          allowedFiles.add(relPath);
-        }
-      });
-      fileList = fileList.filter(absPath => {
-        const relPath = relative(cwd, absPath);
-        if (allowedFiles.has(relPath)) {
-          return true;
-        }
-        for (let dir of allowedDirs) {
-          if (relPath.startsWith(dir + '/')) {
-            return true;
-          }
-        }
-        return false;
-      });
-      debug(`Found ${fileList.length} files: ${JSON.stringify(fileList)}`);
-    }
-
     // This is a useful warning because it prevents people
     // from getting confused about a deployment that renders 404.
-    if (
-      fileList.length === 0 ||
-      fileList.every(f => (f ? basename(f).startsWith('.') : true))
-    ) {
-      debug(
-        `Deployment path has no files (or only dotfiles). Yielding a warning event`
-      );
+    if (fileList.length === 0) {
+      debug('Deployment path has no files. Yielding a warning event');
       yield {
         type: 'warning',
-        payload:
-          'There are no files (or only files starting with a dot) inside your deployment.',
+        payload: 'There are no files inside your deployment.',
       };
     }
 
@@ -166,16 +132,11 @@ export default function buildCreateDeployment(version: number) {
       debug(`Using provided user agent: ${clientOptions.userAgent}`);
     }
 
-    debug(`Setting platform version to ${version}`);
-    deploymentOptions.version = version;
+    debug(`Setting platform version to harcoded value 2`);
+    deploymentOptions.version = 2;
 
     debug(`Creating the deployment and starting upload...`);
-    for await (const event of upload(
-      files,
-      nowConfig,
-      clientOptions,
-      deploymentOptions
-    )) {
+    for await (const event of upload(files, clientOptions, deploymentOptions)) {
       debug(`Yielding a '${event.type}' event`);
       yield event;
     }

@@ -2,7 +2,6 @@ import chalk from 'chalk';
 import psl from 'psl';
 
 import { NowContext } from '../../types';
-import { Output } from '../../util/output';
 import * as ERRORS from '../../util/errors-ts';
 import Client from '../../util/client';
 import getDomainPrice from '../../util/domains/get-domain-price';
@@ -21,17 +20,17 @@ type Options = {
 export default async function buy(
   ctx: NowContext,
   opts: Options,
-  args: string[],
-  output: Output
+  args: string[]
 ) {
   const {
     authConfig: { token },
+    output,
     config,
   } = ctx;
   const { currentTeam } = config;
   const { apiUrl } = ctx;
   const debug = opts['--debug'];
-  const client = new Client({ apiUrl, token, currentTeam, debug });
+  const client = new Client({ apiUrl, token, currentTeam, debug, output });
   let contextName = null;
 
   try {
@@ -70,9 +69,13 @@ export default async function buy(
   }
 
   const availableStamp = stamp();
-  const domainPrice = await getDomainPrice(client, domainName);
-  if (domainPrice instanceof ERRORS.UnsupportedTLD) {
-    output.error(`The TLD for ${param(domainName)} is not supported.`);
+  const [domainPrice, renewalPrice] = await Promise.all([
+    getDomainPrice(client, domainName),
+    getDomainPrice(client, domainName, 'renewal'),
+  ]);
+
+  if (domainPrice instanceof Error) {
+    output.prettyError(domainPrice);
     return 1;
   }
 
@@ -101,14 +104,22 @@ export default async function buy(
     return 0;
   }
 
+  const autoRenew = await promptBool(
+    renewalPrice.period === 1
+      ? `Auto renew yearly for ${chalk.bold(`$${price}`)}?`
+      : `Auto renew every ${renewalPrice.period} years for ${chalk.bold(
+          `$${price}`
+        )}?`,
+    { defaultValue: true }
+  );
+
   let buyResult;
   const purchaseStamp = stamp();
-  const stopPurchaseSpinner = output.spinner('Purchasing');
+  output.spinner('Purchasing');
 
   try {
-    buyResult = await purchaseDomain(client, domainName, price);
+    buyResult = await purchaseDomain(client, domainName, price, autoRenew);
   } catch (err) {
-    stopPurchaseSpinner();
     output.error(
       'An unexpected error occurred while purchasing your domain. Please try again later.'
     );
@@ -116,7 +127,7 @@ export default async function buy(
     return 1;
   }
 
-  stopPurchaseSpinner();
+  output.stopSpinner();
 
   if (buyResult instanceof ERRORS.SourceNotFound) {
     output.error(

@@ -3,16 +3,34 @@ import boxen from 'boxen';
 import { format } from 'util';
 import { Console } from 'console';
 import renderLink from './link';
-import wait from './wait';
+import wait, { StopSpinner } from './wait';
 
-export type Output = ReturnType<typeof createOutput>;
+export type Output = ReturnType<typeof _createOutput>;
 
-export default function createOutput({ debug: debugEnabled = false } = {}) {
+export interface OutputOptions {
+  debug?: boolean;
+}
+
+// Singleton
+let instance: Output | null = null;
+
+export default function createOutput(opts?: OutputOptions) {
+  if (!instance) {
+    instance = _createOutput(opts);
+  }
+  return instance;
+}
+
+function _createOutput({ debug: debugEnabled = false }: OutputOptions = {}) {
+  let spinnerMessage = '';
+  let spinner: StopSpinner | null = null;
+
   function isDebugEnabled() {
     return debugEnabled;
   }
 
   function print(str: string) {
+    stopSpinner();
     process.stderr.write(str);
   }
 
@@ -27,22 +45,19 @@ export default function createOutput({ debug: debugEnabled = false } = {}) {
   function warn(
     str: string,
     slug: string | null = null,
-    link: string | null = null
-  ) {
-    const prevTerm = process.env.TERM;
-
-    if (!prevTerm) {
-      // workaround for https://github.com/sindresorhus/term-size/issues/13
-      process.env.TERM = 'xterm';
+    link: string | null = null,
+    action: string | null = 'Learn More',
+    options?: {
+      boxen?: boxen.Options;
     }
-
-    const details = slug ? `https://err.sh/now/${slug}` : link;
+  ) {
+    const details = slug ? `https://err.sh/vercel/${slug}` : link;
 
     print(
       boxen(
         chalk.bold.yellow('WARN! ') +
           str +
-          (details ? `\nMore details: ${renderLink(details)}` : ''),
+          (details ? `\n${action}: ${renderLink(details)}` : ''),
         {
           padding: {
             top: 0,
@@ -51,12 +66,11 @@ export default function createOutput({ debug: debugEnabled = false } = {}) {
             right: 1,
           },
           borderColor: 'yellow',
+          ...options?.boxen,
         }
       )
     );
     print('\n');
-
-    process.env.TERM = prevTerm;
   }
 
   function note(str: string) {
@@ -67,10 +81,10 @@ export default function createOutput({ debug: debugEnabled = false } = {}) {
     str: string,
     slug?: string,
     link?: string,
-    action = 'More details'
+    action = 'Learn More'
   ) {
     print(`${chalk.red(`Error!`)} ${str}\n`);
-    const details = slug ? `https://err.sh/now/${slug}` : link;
+    const details = slug ? `https://err.sh/vercel/${slug}` : link;
     if (details) {
       print(`${chalk.bold(action)}: ${renderLink(details)}\n`);
     }
@@ -98,18 +112,30 @@ export default function createOutput({ debug: debugEnabled = false } = {}) {
     }
   }
 
-  function spinner(message: string, delay: number = 300) {
+  function setSpinner(message: string, delay: number = 300): void {
+    spinnerMessage = message;
     if (debugEnabled) {
       debug(`Spinner invoked (${message}) with a ${delay}ms delay`);
-      let isEnded = false;
-      return () => {
-        if (isEnded) return;
-        isEnded = true;
-        debug(`Spinner ended (${message})`);
-      };
+      return;
     }
+    if (spinner) {
+      spinner.text = message;
+    } else {
+      spinner = wait(message, delay);
+    }
+  }
 
-    return wait(message, delay);
+  function stopSpinner() {
+    if (debugEnabled && spinnerMessage) {
+      const msg = `Spinner stopped (${spinnerMessage})`;
+      spinnerMessage = '';
+      debug(msg);
+    }
+    if (spinner) {
+      spinner();
+      spinner = null;
+      spinnerMessage = '';
+    }
   }
 
   const c = {
@@ -145,6 +171,7 @@ export default function createOutput({ debug: debugEnabled = false } = {}) {
     dim,
     time,
     note,
-    spinner,
+    spinner: setSpinner,
+    stopSpinner,
   };
 }

@@ -1,6 +1,6 @@
 {
   "name": "@vercel/node",
-  "version": "1.7.2-canary.0",
+  "version": "1.9.1-canary.0",
   "license": "MIT",
   "main": "./dist/index",
   "homepage": "https://vercel.com/docs/runtimes#official-runtimes/node-js",
@@ -10,10 +10,10 @@
     "directory": "packages/now-node"
   },
   "scripts": {
-    "build": "./build.sh",
+    "build": "node build",
     "test-unit": "jest --env node --verbose --runInBand --bail test/helpers.test.js",
     "test-integration-once": "jest --env node --verbose --runInBand --bail test/integration.test.js",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "node build"
   },
   "files": [
     "dist"
@@ -32,13 +32,13 @@
     "@types/cookie": "0.3.3",
     "@types/etag": "1.8.0",
     "@types/test-listen": "1.1.0",
-    "@zeit/ncc": "0.20.4",
-    "@zeit/node-file-trace": "0.6.5",
+    "@vercel/ncc": "0.24.0",
+    "@vercel/nft": "0.9.5",
     "content-type": "1.0.4",
     "cookie": "0.4.0",
     "etag": "1.8.1",
     "mkdirp-promise": "5.0.1",
-    "node-fetch": "2.6.0",
+    "node-fetch": "2.6.1",
     "source-map-support": "0.5.12",
     "test-listen": "1.1.0"
   }

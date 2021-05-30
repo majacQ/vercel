@@ -1,7 +1,6 @@
 import chalk from 'chalk';
 
 import { NowContext } from '../../types';
-import createOutput from '../../util/output';
 import getArgs from '../../util/get-args';
 import getSubcommand from '../../util/get-subcommand';
 import handleError from '../../util/handle-error';
@@ -13,8 +12,8 @@ import transferIn from './transfer-in';
 import inspect from './inspect';
 import ls from './ls';
 import rm from './rm';
-import verify from './verify';
 import move from './move';
+import verify from './verify';
 import { getPkgName } from '../../util/pkg-name';
 
 const help = () => {
@@ -25,17 +24,17 @@ const help = () => {
 
     ls                                  Show all domains in a list
     inspect      [name]                 Displays information related to a domain
-    add          [name]                 Add a new domain that you already own
+    add          [name] [project]       Add a new domain that you already own
     rm           [name]                 Remove a domain
     buy          [name]                 Buy a domain that you don't yet own
     move         [name] [destination]   Move a domain to another user or team.
     transfer-in  [name]                 Transfer in a domain to Vercel
-    verify       [name]                 Run a verification for a domain
 
   ${chalk.dim('Options:')}
 
     -h, --help                     Output usage information
     -d, --debug                    Debug mode [off]
+    -f, --force                    Force a domain on a project and remove it from an existing one
     -A ${chalk.bold.underline('FILE')}, --local-config=${chalk.bold.underline(
     'FILE'
   )}   Path to the local ${'`vercel.json`'} file
@@ -90,10 +89,9 @@ export default async function main(ctx: NowContext) {
 
   try {
     argv = getArgs(ctx.argv.slice(2), {
-      '--cdn': Boolean,
       '--code': String,
-      '--no-cdn': Boolean,
       '--yes': Boolean,
+      '--force': Boolean,
       '--next': Number,
       '-N': '--next',
     });
@@ -107,24 +105,23 @@ export default async function main(ctx: NowContext) {
     return 2;
   }
 
-  const output = createOutput({ debug: argv['--debug'] });
   const { subcommand, args } = getSubcommand(argv._.slice(1), COMMAND_CONFIG);
   switch (subcommand) {
     case 'add':
-      return add(ctx, argv, args, output);
+      return add(ctx, argv, args);
     case 'inspect':
-      return inspect(ctx, argv, args, output);
+      return inspect(ctx, argv, args);
     case 'move':
-      return move(ctx, argv, args, output);
+      return move(ctx, argv, args);
     case 'buy':
-      return buy(ctx, argv, args, output);
+      return buy(ctx, argv, args);
     case 'rm':
-      return rm(ctx, argv, args, output);
+      return rm(ctx, argv, args);
     case 'transferIn':
-      return transferIn(ctx, argv, args, output);
+      return transferIn(ctx, argv, args);
     case 'verify':
-      return verify(ctx, argv, args, output);
+      return verify(ctx, argv, args);
     default:
-      return ls(ctx, argv, args, output);
+      return ls(ctx, argv, args);
   }
 }

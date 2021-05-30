@@ -7,7 +7,6 @@ import getSubcommand from '../../util/get-subcommand';
 import { NowContext } from '../../types';
 import { NowError } from '../../util/now-error';
 import handleError from '../../util/handle-error';
-import createOutput from '../../util/output/create-output';
 import logo from '../../util/output/logo';
 import cmd from '../../util/output/cmd';
 import highlight from '../../util/output/highlight';
@@ -32,6 +31,7 @@ const help = () => {
     -d, --debug            Debug mode [off]
     -l, --listen  [uri]    Specify a URI endpoint on which to listen [0.0.0.0:3000]
     -t, --token   [token]  Specify an Authorization Token
+    --confirm              Skip questions and use defaults when setting up a new project
 
   ${chalk.dim('Examples:')}
 
@@ -50,20 +50,19 @@ const help = () => {
 export default async function main(ctx: NowContext) {
   let argv;
   let args;
-  let output;
+  const { output } = ctx;
 
   try {
     argv = getArgs(ctx.argv.slice(2), {
       '--listen': String,
       '-l': '--listen',
+      '--confirm': Boolean,
 
       // Deprecated
       '--port': Number,
       '-p': '--port',
     });
-    const debug = argv['--debug'];
     args = getSubcommand(argv._.slice(1), COMMAND_CONFIG).args;
-    output = createOutput({ debug });
 
     if ('--port' in argv) {
       output.warn('`--port` is deprecated, please use `--listen` instead');
@@ -97,7 +96,7 @@ export default async function main(ctx: NowContext) {
             'package.json'
           )} must not contain ${cmd('now dev')}`
         );
-        output.error(`More details: http://err.sh/now/now-dev-as-dev-script`);
+        output.error(`Learn More: http://err.sh/vercel/now-dev-as-dev-script`);
         return 1;
       }
       if (scripts && scripts.dev && /\bvercel\b\W+\bdev\b/.test(scripts.dev)) {
@@ -106,7 +105,7 @@ export default async function main(ctx: NowContext) {
             'package.json'
           )} must not contain ${cmd('vercel dev')}`
         );
-        output.error(`More details: http://err.sh/now/now-dev-as-dev-script`);
+        output.error(`Learn More: http://err.sh/vercel/now-dev-as-dev-script`);
         return 1;
       }
     }
@@ -118,7 +117,7 @@ export default async function main(ctx: NowContext) {
   }
 
   try {
-    return await dev(ctx, argv, args, output);
+    return await dev(ctx, argv, args);
   } catch (err) {
     if (err.code === 'ENOTFOUND') {
       // Error message will look like the following:

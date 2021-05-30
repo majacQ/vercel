@@ -17,19 +17,23 @@ import {
 import { NowConfig } from '@vercel/client';
 import { HandleValue, Route } from '@vercel/routing-utils';
 import { Output } from '../output';
+import { ProjectEnvVariable, ProjectSettings } from '../../types';
 
 export { NowConfig };
 
 export interface DevServerOptions {
   output: Output;
   debug: boolean;
-  devCommand: string | undefined;
-  frameworkSlug: string | null;
+  devCommand?: string;
+  frameworkSlug?: string;
+  projectSettings?: ProjectSettings;
+  systemEnvValues?: string[];
+  projectEnvs?: ProjectEnvVariable[];
 }
 
 export interface EnvConfigs {
   /**
-   * environment variables from `.env.build` file (deprecated)
+   * environment variables from `.env.build` file
    */
   buildEnv: Env;
 
@@ -46,6 +50,7 @@ export interface EnvConfigs {
 
 export interface BuildMatch extends BuildConfig {
   entrypoint: string;
+  src: string;
   builderWithPkg: BuilderWithPackage;
   buildOutput: BuilderOutputs;
   buildResults: Map<string | null, BuildResult>;

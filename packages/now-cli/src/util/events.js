@@ -1,5 +1,5 @@
 // Native
-import qs from 'querystring';
+import { URLSearchParams } from 'url';
 
 // Packages
 import { eraseLines } from 'ansi-escapes';
@@ -7,16 +7,21 @@ import { eraseLines } from 'ansi-escapes';
 import jsonlines from 'jsonlines';
 import retry from 'async-retry';
 
-// Utilities
-import createOutput from './output';
-
 async function printEvents(
   now,
   deploymentIdOrURL,
   currentTeam = null,
-  { mode, onOpen = () => {}, onEvent, quiet, debugEnabled, findOpts } = {}
+  {
+    mode,
+    onOpen = () => {},
+    onEvent,
+    quiet,
+    debugEnabled,
+    findOpts,
+    output,
+  } = {}
 ) {
-  const { log, debug } = createOutput({ debug: debugEnabled });
+  const { log, debug } = output;
 
   let onOpenCalled = false;
   function callOnOpenOnce() {
@@ -25,7 +30,7 @@ async function printEvents(
     onOpen();
   }
 
-  const q = qs.stringify({
+  const query = new URLSearchParams({
     direction: findOpts.direction,
     limit: findOpts.limit,
     since: findOpts.since,
@@ -34,7 +39,7 @@ async function printEvents(
     format: 'lines',
   });
 
-  let eventsUrl = `/v1/now/deployments/${deploymentIdOrURL}/events?${q}`;
+  let eventsUrl = `/v1/now/deployments/${deploymentIdOrURL}/events?${query}`;
   let pollUrl = `/v3/now/deployments/${deploymentIdOrURL}`;
 
   if (currentTeam) {

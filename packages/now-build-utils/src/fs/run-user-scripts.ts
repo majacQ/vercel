@@ -165,8 +165,8 @@ export function getSpawnOptions(
 export async function getNodeVersion(
   destPath: string,
   _nodeVersion?: string,
-  _config?: Config,
-  meta?: Meta
+  config: Config = {},
+  meta: Meta = {}
 ): Promise<NodeVersion> {
   if (meta && meta.isDev) {
     // Use the system-installed version of `node` in PATH for `vercel dev`
@@ -174,13 +174,22 @@ export async function getNodeVersion(
     return { ...latest, runtime: 'nodejs' };
   }
   const { packageJson } = await scanParentDirs(destPath, true);
-  let range: string | undefined;
+  let { nodeVersion } = config;
   let isAuto = true;
   if (packageJson && packageJson.engines && packageJson.engines.node) {
-    range = packageJson.engines.node;
+    if (
+      nodeVersion &&
+      nodeVersion !== packageJson.engines.node &&
+      !meta.isDev
+    ) {
+      console.warn(
+        'Warning: Due to `engines` existing in your `package.json` file, the Node.js Version defined in your Project Settings will not apply. Learn More: http://vercel.link/node-version'
+      );
+    }
+    nodeVersion = packageJson.engines.node;
     isAuto = false;
   }
-  return getSupportedNodeVersion(range, isAuto);
+  return getSupportedNodeVersion(nodeVersion, isAuto);
 }
 
 async function scanParentDirs(destPath: string, readPackageJson = false) {
@@ -292,6 +301,11 @@ export async function runNpmInstall(
     opts.prettyCommand = 'yarn install';
     command = 'yarn';
     commandArgs = ['install', ...args];
+
+    // Yarn v2 PnP mode may be activated, so force "node-modules" linker style
+    if (!env.YARN_NODE_LINKER) {
+      env.YARN_NODE_LINKER = 'node-modules';
+    }
   }
 
   if (process.env.NPM_ONLY_PRODUCTION) {
@@ -349,20 +363,35 @@ export async function runPipInstall(
   );
 }
 
+export function getScriptName(
+  pkg: Pick<PackageJson, 'scripts'> | null | undefined,
+  possibleNames: Iterable<string>
+): string | null {
+  if (pkg && pkg.scripts) {
+    for (const name of possibleNames) {
+      if (name in pkg.scripts) {
+        return name;
+      }
+    }
+  }
+  return null;
+}
+
 export async function runPackageJsonScript(
   destPath: string,
-  scriptName: string,
+  scriptNames: string | Iterable<string>,
   spawnOpts?: SpawnOptions
 ) {
   assert(path.isAbsolute(destPath));
   const { packageJson, cliType } = await scanParentDirs(destPath, true);
-  const hasScript = Boolean(
-    packageJson &&
-      packageJson.scripts &&
-      scriptName &&
-      packageJson.scripts[scriptName]
+  const scriptName = getScriptName(
+    packageJson,
+    typeof scriptNames === 'string' ? [scriptNames] : scriptNames
   );
-  if (!hasScript) return false;
+  if (!scriptName) return false;
+
+  debug('Running user script...');
+  const runScriptTime = Date.now();
 
   if (cliType === 'npm') {
     const prettyCommand = `npm run ${scriptName}`;
@@ -373,15 +402,23 @@ export async function runPackageJsonScript(
       prettyCommand,
     });
   } else {
+    // Yarn v2 PnP mode may be activated, so force "node-modules" linker style
+    const env: typeof process.env = { ...spawnOpts?.env };
+    if (!env.YARN_NODE_LINKER) {
+      env.YARN_NODE_LINKER = 'node-modules';
+    }
+
     const prettyCommand = `yarn run ${scriptName}`;
     console.log(`Running "${prettyCommand}"`);
     await spawnAsync('yarn', ['run', scriptName], {
       ...spawnOpts,
+      env,
       cwd: destPath,
       prettyCommand,
     });
   }
 
+  debug(`Script complete [${Date.now() - runScriptTime}ms]`);
   return true;
 }
 

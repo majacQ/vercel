@@ -7,7 +7,7 @@ import * as ERRORS from '../../util/errors-ts';
 import { Output } from '../../util/output';
 import deleteCertById from '../../util/certs/delete-cert-by-id';
 import getCertById from '../../util/certs/get-cert-by-id';
-import getCertsForDomain from '../../util/certs/get-certs-for-domain';
+import { getCustomCertsForDomain } from '../../util/certs/get-custom-certs-for-domain';
 import Client from '../../util/client';
 import getScope from '../../util/get-scope';
 import stamp from '../../util/output/stamp';
@@ -18,21 +18,17 @@ type Options = {
   '--debug': boolean;
 };
 
-async function rm(
-  ctx: NowContext,
-  opts: Options,
-  args: string[],
-  output: Output
-) {
+async function rm(ctx: NowContext, opts: Options, args: string[]) {
   const {
     authConfig: { token },
+    output,
     config,
   } = ctx;
   const { currentTeam } = config;
   const { apiUrl } = ctx;
   const rmStamp = stamp();
   const debug = opts['--debug'];
-  const client = new Client({ apiUrl, token, currentTeam, debug });
+  const client = new Client({ apiUrl, token, currentTeam, debug, output });
 
   let contextName = null;
 
@@ -66,9 +62,17 @@ async function rm(
   }
 
   if (certs.length === 0) {
-    output.error(
-      `No certificates found by id "${id}" under ${chalk.bold(contextName)}`
-    );
+    if (id.includes('.')) {
+      output.error(
+        `No custom certificates found for "${id}" under ${chalk.bold(
+          contextName
+        )}`
+      );
+    } else {
+      output.error(
+        `No certificates found by id "${id}" under ${chalk.bold(contextName)}`
+      );
+    }
     return 1;
   }
 
@@ -101,7 +105,7 @@ async function getCertsToDelete(
 ) {
   const cert = await getCertById(client, id);
   if (cert instanceof ERRORS.CertNotFound) {
-    const certs = await getCertsForDomain(output, client, contextName, id);
+    const certs = await getCustomCertsForDomain(client, contextName, id);
     if (certs instanceof ERRORS.CertsPermissionDenied) {
       return certs;
     }
@@ -125,12 +129,7 @@ function readConfirmation(output: Output, msg: string, certs: Cert[]) {
     process.stdin
       .on('data', d => {
         process.stdin.pause();
-        resolve(
-          d
-            .toString()
-            .trim()
-            .toLowerCase() === 'y'
-        );
+        resolve(d.toString().trim().toLowerCase() === 'y');
       })
       .resume();
   });

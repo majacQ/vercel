@@ -3,16 +3,21 @@ const { createHash } = require('crypto');
 const path = require('path');
 const _fetch = require('node-fetch');
 const fetch = require('./fetch-retry.js');
+const fileModeSymbol = Symbol('fileMode');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-async function nowDeploy(bodies, randomness) {
+async function nowDeploy(bodies, randomness, uploadNowJson) {
   const files = Object.keys(bodies)
-    .filter(n => n !== 'vercel.json' && n !== 'now.json')
+    .filter(n =>
+      uploadNowJson ? true : n !== 'vercel.json' && n !== 'now.json'
+    )
     .map(n => ({
       sha: digestOfFile(bodies[n]),
       size: bodies[n].length,
       file: n,
-      mode: path.extname(n) === '.sh' ? 0o100755 : 0o100644,
+      mode:
+        bodies[n][fileModeSymbol] ||
+        (path.extname(n) === '.sh' ? 0o100755 : 0o100644),
     }));
 
   const { FORCE_BUILD_IN_REGION, NOW_DEBUG, VERCEL_DEBUG } = process.env;
@@ -59,10 +64,18 @@ async function nowDeploy(bodies, randomness) {
   console.log('deploymentUrl', `https://${deploymentUrl}`);
 
   for (let i = 0; i < 750; i += 1) {
-    const { state } = await deploymentGet(deploymentId);
-    if (state === 'ERROR')
-      throw new Error(`State of ${deploymentUrl} is ${state}`);
-    if (state === 'READY') break;
+    const deployment = await deploymentGet(deploymentId);
+    const { readyState } = deployment;
+    if (readyState === 'ERROR') {
+      const error = new Error(
+        `State of https://${deploymentUrl} is ${readyState}`
+      );
+      error.deployment = deployment;
+      throw error;
+    }
+    if (readyState === 'READY') {
+      break;
+    }
     await new Promise(r => setTimeout(r, 1000));
   }
 
@@ -70,9 +83,7 @@ async function nowDeploy(bodies, randomness) {
 }
 
 function digestOfFile(body) {
-  return createHash('sha1')
-    .update(body)
-    .digest('hex');
+  return createHash('sha1').update(body).digest('hex');
 }
 
 async function filePost(body, digest) {
@@ -123,7 +134,7 @@ async function deploymentPost(payload) {
 }
 
 async function deploymentGet(deploymentId) {
-  const url = `/v3/now/deployments/${deploymentId}`;
+  const url = `/v12/now/deployments/${deploymentId}`;
   const resp = await fetchWithAuth(url);
   const json = await resp.json();
   if (json.error) {
@@ -143,21 +154,19 @@ async function fetchWithAuth(url, opts = {}) {
   if (!opts.headers) opts.headers = {};
 
   if (!opts.headers.Authorization) {
-    currentCount += 1;
-    if (!token || currentCount === MAX_COUNT) {
-      currentCount = 0;
-      // used for health checks
-      token = process.env.VERCEL_TOKEN || process.env.NOW_TOKEN;
-      if (!token) {
-        // used by GH Actions
-        token = await fetchTokenWithRetry();
-      }
-    }
-
-    opts.headers.Authorization = `Bearer ${token}`;
+    opts.headers.Authorization = `Bearer ${await fetchCachedToken()}`;
   }
 
   return await fetchApi(url, opts);
+}
+
+async function fetchCachedToken() {
+  currentCount += 1;
+  if (!token || currentCount === MAX_COUNT) {
+    currentCount = 0;
+    token = await fetchTokenWithRetry();
+  }
+  return token;
 }
 
 async function fetchTokenWithRetry(retries = 5) {
@@ -237,4 +246,6 @@ module.exports = {
   fetchWithAuth,
   nowDeploy,
   fetchTokenWithRetry,
+  fetchCachedToken,
+  fileModeSymbol,
 };
