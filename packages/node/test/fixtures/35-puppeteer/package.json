@@ -4,7 +4,12 @@
   },
   "dependencies": {
     "chrome-aws-lambda": "1.20.4",
+  <<<<<<< snyk-fix-7d76625abb9b28ba11c966a2839b7f1d
+    "lighthouse": "7.5.0",
+    "puppeteer-core": "1.20.0"
+  =======
     "lighthouse": "5.6.0",
     "puppeteer-core": "3.0.0"
+  >>>>>>> master
   }
 }
