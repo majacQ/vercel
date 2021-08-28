@@ -18,7 +18,9 @@
     "prepublishOnly": "yarn build",
     "coverage": "nyc report --reporter=text-lcov > coverage.lcov && codecov",
     "build": "ts-node ./scripts/build.ts",
-    "build-dev": "ts-node ./scripts/build.ts --dev"
+    "build-dev": "ts-node ./scripts/build.ts --dev",
+    "prepublish": "npm run snyk-protect",
+    "snyk-protect": "snyk-protect"
   },
   "nyc": {
     "include": [
@@ -66,7 +68,8 @@
     "@vercel/node": "1.10.0",
     "@vercel/python": "2.0.1",
     "@vercel/ruby": "1.2.6",
-    "update-notifier": "4.1.0"
+    "update-notifier": "4.1.0",
+    "@snyk/protect": "latest"
   },
   "devDependencies": {
     "@sentry/node": "5.5.0",
@@ -175,5 +178,6 @@
     "which": "2.0.2",
     "write-json-file": "2.2.0",
     "xdg-app-paths": "5.1.0"
-  }
+  },
+  "snyk": true
 }
