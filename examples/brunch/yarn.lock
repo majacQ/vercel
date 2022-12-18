@@ -1022,11 +1022,11 @@ clean-css-brunch@^2:
   resolved "https://registry.yarnpkg.com/clean-css-brunch/-/clean-css-brunch-2.10.0.tgz#6a151e6509589cd341dce04981a1c75062a22d18"
   integrity sha1-ahUeZQlYnNNB3OBJgaHHUGKiLRg=
   dependencies:
-    clean-css "~4.0"
+    clean-css "~4.11.1"
 
-clean-css@~4.0:
-  version "4.0.13"
-  resolved "https://registry.yarnpkg.com/clean-css/-/clean-css-4.0.13.tgz#feb2a176062d72a6c3e624d9213cac6a0c485e80"
+clean-css@~4.11.1:
+  version "4.11.1"
+  resolved "https://registry.yarnpkg.com/clean-css/-/clean-css-4.11.1.tgz#feb2a176062d72a6c3e624d9213cac6a0c485e80"
   integrity sha1-/rKhdgYtcqbD5iTZITysagxIXoA=
   dependencies:
     source-map "0.5.x"
