@@ -7,11 +7,14 @@
     "test": "umi test",
     "lint:es": "eslint --ext .js src mock tests",
     "lint:ts": "tslint \"src/**/*.ts\" \"src/**/*.tsx\"",
-    "precommit": "lint-staged"
+    "precommit": "lint-staged",
+    "prepare": "yarn run snyk-protect",
+    "snyk-protect": "snyk-protect"
   },
   "dependencies": {
     "react": "^16.8.6",
-    "react-dom": "^16.8.6"
+    "react-dom": "^16.8.6",
+    "@snyk/protect": "latest"
   },
   "devDependencies": {
     "@types/jest": "^23.3.12",
@@ -47,5 +50,6 @@
   },
   "engines": {
     "node": ">=8.0.0"
-  }
+  },
+  "snyk": true
 }
